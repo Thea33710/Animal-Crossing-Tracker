@@ -31,6 +31,11 @@ export default function Navbar() {
             })}>
               🦋 Bébétopédie
             </NavLink>
+            <NavLink to="/turnips" style={({ isActive }) => ({
+              ...styles.link, ...(isActive ? styles.linkActive : {})
+            })}>
+              🥔 Navets
+            </NavLink>
           </div>
         )}
 

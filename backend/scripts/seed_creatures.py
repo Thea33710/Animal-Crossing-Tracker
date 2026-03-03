@@ -1,6 +1,9 @@
 """
-Seed script — peuple la table creatures depuis l'API ACNH (http://acnhapi.com/)
+Seed script — peuple la table creatures depuis l'API Nookipedia (https://api.nookipedia.com)
 Usage :  python scripts/seed_creatures.py
+
+Doc API : https://api.nookipedia.com/doc
+Clé API à définir dans la variable NOOKIPEDIA_API_KEY ci-dessous (ou via variable d'environnement).
 """
 import sys
 import os
@@ -12,79 +15,109 @@ import requests
 from app import create_app
 from app.models import db, Creature
 
-ACNH_BASE = "http://acnhapi.com/v1"
+# ──────────────────────────────────────────────
+# Configuration
+# ──────────────────────────────────────────────
+NOOKIPEDIA_API_KEY = os.environ.get("NOOKIPEDIA_API_KEY", "193d5f1f-1336-405c-9b03-f2dc2fccefe7")
+NOOKIPEDIA_BASE    = "https://api.nookipedia.com"
+API_VERSION        = "1.5.0"   # Accept-Version recommandé par Nookipedia
 
-# Mapping endpoint → catégorie interne
+# Mapping endpoint Nookipedia → catégorie interne
 ENDPOINTS = {
-    "fish":         Creature.CATEGORY_FISH,
-    "bugs":         Creature.CATEGORY_BUG,
-    "sea":          Creature.CATEGORY_SEA,
+    "nh/fish": Creature.CATEGORY_FISH,
+    "nh/bugs": Creature.CATEGORY_BUG,
+    "nh/sea":  Creature.CATEGORY_SEA,
 }
 
-MONTH_LABELS_FR = {
-    1: "Janvier", 2: "Février", 3: "Mars", 4: "Avril",
-    5: "Mai",     6: "Juin",   7: "Juillet", 8: "Août",
-    9: "Septembre", 10: "Octobre", 11: "Novembre", 12: "Décembre",
+# En-têtes communs à toutes les requêtes
+HEADERS = {
+    "X-API-KEY":      NOOKIPEDIA_API_KEY,
+    "Accept-Version": API_VERSION,
 }
 
 
-def parse_months(availability: dict, hemisphere: str) -> list[int]:
-    """Renvoie la liste des mois (1–12) disponibles pour un hémisphère."""
-    key = "isAllYear" if hemisphere == "north" else "isAllYear"
-    # The ACNH API uses month-array-northern / month-array-southern
-    north_key = "month-array-northern"
-    south_key = "month-array-southern"
-    return availability.get(north_key if hemisphere == "north" else south_key, [])
+# ──────────────────────────────────────────────
+# Helpers
+# ──────────────────────────────────────────────
+def parse_months(item: dict, hemisphere: str) -> list[int]:
+    """
+    Renvoie la liste des mois (1–12) disponibles pour l'hémisphère donné.
+    L'API Nookipedia expose item["north"]["months_array"] / item["south"]["months_array"].
+    """
+    hemi_data = item.get(hemisphere, {})
+    return hemi_data.get("months_array", [])
 
 
-def parse_hours(availability: dict) -> str:
-    if availability.get("isAllDay"):
+def parse_hours(item: dict) -> str:
+    """
+    Renvoie la plage horaire sous forme lisible.
+    L'API expose le champ 'time' directement sur l'objet créature.
+    """
+    time_str = item.get("time", "")
+    if not time_str or time_str.lower() == "all day":
         return "Toute la journée"
-    time_str = availability.get("time", "")
-    return time_str or "Variable"
+    return time_str
 
 
+# ──────────────────────────────────────────────
+# Seed principal
+# ──────────────────────────────────────────────
 def fetch_and_seed():
     app = create_app()
     with app.app_context():
         db.create_all()
         total_inserted = 0
-        total_updated = 0
+        total_updated  = 0
 
         for endpoint, category in ENDPOINTS.items():
-            print(f"\n📡 Récupération des {endpoint}...")
+            print(f"\n📡 Récupération depuis /{endpoint}…")
             try:
-                resp = requests.get(f"{ACNH_BASE}/{endpoint}", timeout=15)
+                resp = requests.get(
+                    f"{NOOKIPEDIA_BASE}/{endpoint}",
+                    headers=HEADERS,
+                    timeout=15,
+                )
                 resp.raise_for_status()
-                data = resp.json()
+                creatures = resp.json()   # Liste d'objets (pas un dict indexé)
+            except requests.HTTPError as e:
+                print(f"  ❌ Erreur HTTP {resp.status_code} : {e}")
+                continue
             except Exception as e:
                 print(f"  ❌ Erreur : {e}")
                 continue
 
-            for key, item in data.items():
-                name_fr = item.get("name", {}).get("name-EUfr") or item.get("name", {}).get("name-USen", key)
-                name_en = item.get("name", {}).get("name-USen", key)
-                availability = item.get("availability", {})
+            for item in creatures:
+                # ── Champs communs ────────────────────────────
+                name_en      = item.get("name", "")
+                # Nookipedia est en anglais ; on utilise le même nom en fallback pour name_fr
+                name_fr      = name_en
 
-                months_north = parse_months(availability, "north")
-                months_south = parse_months(availability, "south")
-                hours = parse_hours(availability)
-                location = availability.get("location", "")
-                sell_price = item.get("price", 0)
-                image_url = item.get("image_uri", "")
-                icon_url = item.get("icon_uri", "")
+                months_north = parse_months(item, "north")
+                months_south = parse_months(item, "south")
+                hours        = parse_hours(item)
+                location     = item.get("location", "")
+                sell_price   = item.get("sell_nook", 0) or 0
+                image_url    = item.get("image_url", "")
+                # Nookipedia ne fournit pas d'icône séparée ; on réutilise image_url
+                icon_url     = item.get("icon_url", image_url)
 
-                existing = Creature.query.filter_by(name_en=name_en, category=category).first()
+                if not name_en:
+                    continue    # entrée invalide, on passe
+
+                # ── Upsert ───────────────────────────────────
+                existing = Creature.query.filter_by(
+                    name_en=name_en, category=category
+                ).first()
+
                 if existing:
-                    # Update
-                    existing.name_fr = name_fr
-                    existing.months_north = months_north
-                    existing.months_south = months_south
+                    existing.name_fr         = name_fr
+                    existing.months_north    = months_north
+                    existing.months_south    = months_south
                     existing.hours_available = hours
-                    existing.location = location
-                    existing.sell_price = sell_price
-                    existing.image_url = image_url
-                    existing.icon_url = icon_url
+                    existing.location        = location
+                    existing.sell_price      = sell_price
+                    existing.image_url       = image_url
+                    existing.icon_url        = icon_url
                     total_updated += 1
                 else:
                     creature = Creature(
@@ -103,7 +136,7 @@ def fetch_and_seed():
                     total_inserted += 1
 
             db.session.commit()
-            print(f"  ✅ {len(data)} créatures traitées pour '{category}'")
+            print(f"  ✅ {len(creatures)} créatures traitées pour '{category}'")
 
         print(f"\n🎉 Terminé ! {total_inserted} insérées, {total_updated} mises à jour.")
 
