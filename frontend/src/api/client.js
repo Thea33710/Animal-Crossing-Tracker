@@ -47,4 +47,13 @@ export const creaturesApi = {
   stats:  (island_id)              => api.get('/creopedia/stats', { params: { island_id } }),
 }
 
+// ─── Turnips ──────────────────────────────────────────────────────────────
+export const turnipsApi = {
+  savePrices:    (data)      => api.post('/turnips/prices', data),
+  getCurrentWeek: (island_id) => api.get('/turnips/prices/current', { params: { island_id } }),
+  predict:        (island_id) => api.get('/turnips/predict', { params: { island_id } }),
+  history:        (island_id, limit = 10) => api.get('/turnips/history', { params: { island_id, limit } }),
+  deleteWeek:     (island_id) => api.delete('/turnips/prices/current', { params: { island_id } }),
+}
+
 export default api

@@ -8,6 +8,7 @@ import Signup     from './pages/Signup'
 import IslandSetup from './pages/IslandSetup'
 import Dashboard  from './pages/Dashboard'
 import Creopedia  from './pages/Creopedia'
+import Turnips    from './pages/Turnips'
 
 export default function App() {
   return (
@@ -27,6 +28,9 @@ export default function App() {
         } />
         <Route path="/creopedia" element={
           <ProtectedRoute><Creopedia /></ProtectedRoute>
+        } />
+        <Route path="/turnips" element={
+          <ProtectedRoute><Turnips /></ProtectedRoute>
         } />
 
         {/* Default redirect */}

@@ -26,10 +26,12 @@ def create_app(config_name=None):
     from app.routes.auth import auth_bp
     from app.routes.islands import islands_bp
     from app.routes.creatures import creatures_bp
+    from app.routes.turnips import turnips_bp
 
     app.register_blueprint(auth_bp, url_prefix="/api/auth")
     app.register_blueprint(islands_bp, url_prefix="/api/islands")
     app.register_blueprint(creatures_bp, url_prefix="/api")
+    app.register_blueprint(turnips_bp, url_prefix="/api/turnips")
 
     @app.get("/api/health")
     def health():

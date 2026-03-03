@@ -81,8 +81,8 @@ export default function Dashboard() {
           </Link>
         </div>
 
-        {/* Navets — coming soon */}
-        <div style={{ ...styles.moduleCard, opacity: 0.65 }}>
+        {/* Navets */}
+        <div style={styles.moduleCard}>
           <div style={styles.moduleIcon}>🥔</div>
           <div style={styles.moduleContent}>
             <h3 style={styles.moduleTitle}>Marché aux navets</h3>
@@ -90,9 +90,9 @@ export default function Dashboard() {
               Saisissez vos prix hebdomadaires et laissez l'IA prédire le meilleur moment pour vendre.
             </p>
           </div>
-          <span style={{ ...styles.moduleBtn, background: '#EEE', color: '#999', pointerEvents: 'none', display: 'inline-block', padding: '0.6rem 1.4rem', borderRadius: 50 }}>
-            Bientôt
-          </span>
+          <Link to="/turnips" className="btn btn-primary" style={styles.moduleBtn}>
+            Accéder →
+          </Link>
         </div>
       </div>
 
